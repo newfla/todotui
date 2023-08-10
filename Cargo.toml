@@ -12,3 +12,8 @@ tokio = { version = "1.29", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["full"] }
 serde = {version = "1.0", features = ["std","rc"]}
 postcard = { version = "1.0", features = ["use-std"] }
+tuirealm = "1.8"
+tui-realm-stdlib = "1.2"
+
+[workspace]
+

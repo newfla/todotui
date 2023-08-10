@@ -1,3 +1,5 @@
+use todotui::model::Model;
+
 fn main() {
-    println!("Hello, world!");
+    Model::default().main_loop();
 }
