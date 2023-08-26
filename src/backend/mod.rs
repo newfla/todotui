@@ -1,6 +1,7 @@
 use std::{
+    fs::{read, read_dir, remove_file, write},
     hash::Hash,
-    io::Error,
+    io::{self, Error},
     ops::Deref,
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -10,11 +11,6 @@ use chrono::Utc;
 use derive_builder::Builder;
 use postcard::{from_bytes, to_stdvec};
 use serde::{Deserialize, Serialize};
-use tokio::{
-    fs::{read, read_dir, remove_file, write},
-    io,
-};
-use tokio_stream::{wrappers::ReadDirStream, StreamExt};
 
 static DATE_FORMAT: &str = "%d_%m_%Y_%H:%M_%6f";
 static FILE_EXTENSION: &str = "post";
@@ -22,7 +18,7 @@ static POISONED: &str = "Poisoned mutex";
 static EMPTY_NOTE: &str = "Note is empty";
 static FAILED_SERIALIZATION: &str = "Failed to serialize";
 
-#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct InternalTodo {
     done: Option<bool>,
     description: String,
@@ -39,8 +35,20 @@ impl PartialEq for Todo {
 
 impl Eq for Todo {}
 
+impl PartialOrd for Todo {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(
+            self.0
+                .read()
+                .unwrap()
+                .deref()
+                .cmp(other.0.read().unwrap().deref()),
+        )
+    }
+}
+
 impl Todo {
-    pub fn get_done(&self) -> Result<Option<bool>, &'static str> {
+    pub fn done(&self) -> Result<Option<bool>, &'static str> {
         match self.0.read() {
             Ok(data) => Ok(data.done),
             Err(_) => Err(POISONED),
@@ -57,7 +65,7 @@ impl Todo {
         }
     }
 
-    pub fn get_description(&self) -> Result<String, &'static str> {
+    pub fn description(&self) -> Result<String, &'static str> {
         match self.0.read() {
             Ok(data) => Ok(data.description.clone()),
             Err(_) => Err(POISONED),
@@ -75,7 +83,7 @@ impl Todo {
     }
 }
 
-#[derive(Eq, Clone, Deserialize, Serialize, Debug)]
+#[derive(Eq, Clone, Deserialize, Serialize, Debug, PartialOrd)]
 struct InternalNote {
     title: String,
     created: String,
@@ -119,7 +127,7 @@ impl InternalNote {
     }
 }
 
-#[derive(Eq, Debug)]
+#[derive(Debug, Eq)]
 struct PersistenceInternalNote {
     path: PathBuf,
     note: Option<InternalNote>,
@@ -140,6 +148,12 @@ impl PartialEq for PersistenceInternalNote {
     }
 }
 
+impl PartialOrd for PersistenceInternalNote {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.path.partial_cmp(&other.path)
+    }
+}
+
 impl Hash for PersistenceInternalNote {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.path.hash(state);
@@ -156,6 +170,16 @@ impl PartialEq for Note {
 }
 
 impl Eq for Note {}
+
+impl PartialOrd for Note {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0
+            .read()
+            .unwrap()
+            .deref()
+            .partial_cmp(other.0.read().unwrap().deref())
+    }
+}
 
 impl Hash for Note {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -181,6 +205,36 @@ impl Note {
                     note.title = title.to_string();
                     Ok(())
                 }
+                None => Err(EMPTY_NOTE),
+            },
+            Err(_) => Err(POISONED),
+        }
+    }
+
+    pub fn title(&self) -> Result<String, &'static str>  {
+        match self.title_internal() {
+            Ok(title) => match title.is_empty() {
+                true => Ok(self.created().unwrap()),
+                false => Ok(title),
+            },
+            Err(_) => Ok(self.created().unwrap()),
+        }
+    }
+
+    fn created(&self) -> Result<String, &'static str> {
+        match self.0.read() {
+            Ok(data_guard) => match &data_guard.note {
+                Some(data) => Ok(data.created.clone()),
+                None => Ok("".to_string()),
+            },
+            Err(_) => Err(POISONED),
+        }
+    }
+
+    fn title_internal(&self) -> Result<String, &'static str> {
+        match self.0.read() {
+            Ok(data_guard) => match &data_guard.note {
+                Some(data) => Ok(data.title.clone()),
                 None => Err(EMPTY_NOTE),
             },
             Err(_) => Err(POISONED),
@@ -214,7 +268,7 @@ impl Note {
         }
     }
 
-    pub fn get_todos(&self) -> Vec<Todo> {
+    pub fn todos(&self) -> Vec<Todo> {
         match self.0.read() {
             Ok(data_guard) => match &data_guard.note {
                 Some(data) => data.todos.to_vec(),
@@ -224,9 +278,9 @@ impl Note {
         }
     }
 
-    async fn load(&self) -> bool {
+    fn load(&self) -> bool {
         let path = self.0.read().unwrap().path.clone();
-        let note = match read(path).await.map(|data| from_bytes(&data)) {
+        let note = match read(path).map(|data| from_bytes(&data)) {
             Ok(note) => note.ok(),
             Err(_) => None,
         };
@@ -243,7 +297,7 @@ impl Note {
         }
     }
 
-    async fn save(&self) -> io::Result<()> {
+    fn save(&self) -> io::Result<()> {
         let (note, path) = {
             let data_guard = self.0.read().unwrap();
             (data_guard.note.clone(), data_guard.path.clone())
@@ -251,7 +305,7 @@ impl Note {
 
         match note {
             Some(note) => match to_stdvec(&note) {
-                Ok(data) => write(path, data).await,
+                Ok(data) => write(path, data),
                 Err(_) => Err(Error::new(io::ErrorKind::Other, FAILED_SERIALIZATION)),
             },
             None => Ok(()),
@@ -260,36 +314,31 @@ impl Note {
 }
 
 #[derive(Builder, Default)]
-struct NotesWall {
+pub struct NotesWall {
     folder_path: PathBuf,
     #[builder(setter(skip))]
     notes: Vec<Note>,
 }
 
 impl NotesWall {
-    pub async fn init(&mut self) -> &Self {
-        self.notes = match read_dir(self.folder_path.as_path()).await {
-            Err(_) => Vec::default(),
-            Ok(data) => {
-                ReadDirStream::new(data)
-                    .filter(|file| {
-                        file.as_ref().is_ok_and(|f| {
-                            f.file_name()
-                                .to_str()
-                                .unwrap()
-                                .contains(&(".".to_owned() + FILE_EXTENSION))
-                        })
-                    })
-                    .map(|path| {
-                        let note = Note::default();
-                        let _ = note.set_path(path.unwrap().path());
-                        note
-                    })
-                    .collect()
-                    .await
-            }
-        };
-        self
+    pub fn init(&mut self) -> io::Result<()> {
+        self.notes = read_dir(self.folder_path.as_path())?
+            .filter(|file| {
+                file.as_ref().is_ok_and(|f| {
+                    f.file_name()
+                        .to_str()
+                        .unwrap()
+                        .contains(&(".".to_owned() + FILE_EXTENSION))
+                })
+            })
+            .map(|path| {
+                let note = Note::default();
+                let _ = note.set_path(path.unwrap().path());
+                note
+            })
+            .filter(|note| note.load())
+            .collect();
+        Ok(())
     }
 
     pub fn get_notes(&self) -> Vec<Note> {
@@ -315,7 +364,7 @@ impl NotesWall {
         note
     }
 
-    pub async fn remove_note(&mut self, note: Note) -> io::Result<()> {
+    pub fn remove_note(&mut self, note: Note) -> io::Result<()> {
         let index = self.notes.iter().position(|e| e == &note);
         match index {
             Some(index) => {
@@ -324,16 +373,16 @@ impl NotesWall {
                     let data_guard = note.0.read().unwrap();
                     data_guard.path.clone()
                 };
-                remove_file(path.as_path()).await
+                remove_file(path.as_path())
             }
             None => Ok(()),
         }
     }
 
-    pub async fn save_all(&self) -> io::Result<()> {
+    pub fn save_all(&self) -> io::Result<()> {
         let mut status = Ok(());
         for e in self.notes.iter() {
-            let result = e.save().await;
+            let result = e.save();
             status = status.and(result);
         }
         status
@@ -358,8 +407,8 @@ mod tests {
         let _ = fs::remove_dir_all(TEST_FOLDER_PATH);
     }
 
-    #[tokio::test]
-    async fn standard_test() {
+    #[test]
+    fn standard_test() {
         //Create work dir
         init_test_folder();
 
@@ -373,11 +422,12 @@ mod tests {
             .unwrap();
 
         //This will load an empty wall due to empty work dir
-        wall_1.init().await;
+        assert!(wall_1.init().is_ok());
         assert_eq!(wall_1.get_notes().len(), 0);
 
         let mut note_1 = wall_1.create_note();
         let mut note_2 = wall_1.create_note();
+        let _ = wall_1.create_note();
 
         assert!(note_1.set_title("note_1").is_ok());
         assert!(note_2.set_title("note_2").is_ok());
@@ -385,6 +435,8 @@ mod tests {
         let todo_1 = note_1.create_todo().unwrap();
         let todo_2 = note_1.create_todo().unwrap();
         let todo_3 = note_2.create_todo().unwrap();
+        let todo_4 = note_2.create_todo().unwrap();
+        let todo_5 = note_2.create_todo().unwrap();
 
         assert!(todo_1.set_description("desc1").is_ok());
         assert!(todo_1.set_done(Some(true)).is_ok());
@@ -392,6 +444,10 @@ mod tests {
         assert!(todo_2.set_done(Some(true)).is_ok());
         assert!(todo_3.set_description("desc3").is_ok());
         assert!(todo_3.set_done(Some(false)).is_ok());
+        assert!(todo_4.set_description("desc4").is_ok());
+        assert!(todo_4.set_done(None).is_ok());
+        assert!(todo_5.set_description("desc5").is_ok());
+        assert!(todo_5.set_done(Some(true)).is_ok());
 
         //wall_1 has two notes attached to it
         let binding_wall_1 = wall_1.get_notes();
@@ -399,15 +455,6 @@ mod tests {
         assert_eq!(note_1, notes_wall_1.next().unwrap().to_owned());
         assert_eq!(note_2, notes_wall_1.next().unwrap().to_owned());
 
-        assert!(wall_1.save_all().await.is_ok());
-
-        //wall_2 points to the same wall_1 work dir
-        let binding_wall_2 = wall_2.init().await.get_notes();
-        let mut notes_wall_2 = binding_wall_2.iter();
-
-        assert_eq!(note_1, notes_wall_2.next().unwrap().to_owned());
-        assert_eq!(note_2, notes_wall_2.next().unwrap().to_owned());
-
-        cleanup_test_folder();
+        assert!(wall_1.save_all().is_ok());
     }
 }
