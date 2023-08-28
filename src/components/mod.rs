@@ -5,9 +5,10 @@ use tuirealm::{
         CmdResult::{self, Changed},
         Direction, Position,
     },
-    event::{Key, KeyEvent},
+    event::{Key, KeyEvent, KeyModifiers},
     props::{
-        Alignment, BorderType, Borders, Color, InputType, Style, Table, TableBuilder, TextSpan,
+        Alignment, BorderType, Borders, Color, InputType, PropPayload, PropValue, Style, Table,
+        TableBuilder, TextSpan,
     },
     AttrValue, Attribute, Component, Event, MockComponent,
 };
@@ -59,27 +60,51 @@ impl Default for NoteList {
 impl Component<Msg, AppEvent> for NoteList {
     fn on(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => return Some(Msg::NoteListBlur),
-            Event::Keyboard(KeyEvent { code: Key::Char('m'), .. }) => {
-                return Some(Msg::EditNote(0))
-            },
+            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => Some(Msg::NoteListBlur),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('e'),
+                ..
+            }) => Some(Msg::EditNote),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('a'),
+                ..
+            }) => Some(Msg::AddNote),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('d'),
+                ..
+            }) => Some(Msg::RemoveNote),
             Event::Keyboard(KeyEvent { code: _, .. }) => self.maybe_scroll_note_list(ev),
             Event::User(AppEvent::NoteLoaded(data)) => {
                 if data.is_empty() {
-                    return None;
+                    return Some(Msg::None);
                 }
                 self.component.attr(
                     Attribute::Content,
                     AttrValue::Table(Self::build_table_list(data)),
                 );
-                Some(NoteSelected(0))
+                Some(NoteSelected(
+                    self.component.state().unwrap_one().unwrap_usize(),
+                ))
             }
-            _ => None,
+            _ => Some(Msg::None),
         }
     }
 }
 
 impl NoteList {
+    pub fn new(notes: Vec<Note>, index: usize) -> Self {
+        let mut list = NoteList::default();
+
+        list.component.attr(
+            Attribute::Content,
+            AttrValue::Table(Self::build_table_list(notes)),
+        );
+        list.component.attr(
+            Attribute::Value,
+            AttrValue::Payload(PropPayload::One(PropValue::Usize(index))),
+        );
+        list
+    }
     fn maybe_scroll_note_list(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
         if let Changed(state) = maybe_scroll_list(&mut self.component, ev) {
             return Some(NoteSelected(state.unwrap_one().unwrap_usize()));
@@ -91,8 +116,8 @@ impl NoteList {
         let mut table = TableBuilder::default();
 
         notes.iter().enumerate().for_each(|(index, note)| {
-            let index_str = format!("{:02}", index);
-            
+            let index_str = format!("{:03}", index + 1);
+
             let row = table
                 .add_col(TextSpan::from(index_str).fg(Color::Cyan).italic())
                 .add_col(TextSpan::from(" "))
@@ -121,7 +146,7 @@ impl Default for ShortcutsLegend {
                 .borders(Borders::default().modifiers(BorderType::Double))
                 .rows(
                     TableBuilder::default()
-                        .add_col(TextSpan::from(" ESC").fg(Color::LightRed).bold())
+                        .add_col(TextSpan::from(" ESC").bold())
                         .add_col(TextSpan::from("  "))
                         .add_col(TextSpan::from("Quit the application"))
                         .add_row()
@@ -135,15 +160,15 @@ impl Default for ShortcutsLegend {
                         .add_row()
                         .add_col(TextSpan::from(" A").bold())
                         .add_col(TextSpan::from("    "))
-                        .add_col(TextSpan::from("Add a note/item"))
+                        .add_col(TextSpan::from("Add note/item"))
                         .add_row()
-                        .add_col(TextSpan::from(" M").bold())
+                        .add_col(TextSpan::from(" E").bold())
                         .add_col(TextSpan::from("    "))
-                        .add_col(TextSpan::from("Modify a note/item"))
+                        .add_col(TextSpan::from("Edit note/item"))
                         .add_row()
-                        .add_col(TextSpan::from(" S").fg(Color::LightGreen).bold())
+                        .add_col(TextSpan::from(" D").bold())
                         .add_col(TextSpan::from("    "))
-                        .add_col(TextSpan::from("Save note"))
+                        .add_col(TextSpan::from("Delete note/item"))
                         .build(),
                 ),
         }
@@ -182,14 +207,44 @@ impl Default for TodoList {
 impl Component<Msg, AppEvent> for TodoList {
     fn on(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => return Some(Msg::TodoListBlur),
+            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => Some(Msg::TodoListBlur),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('e'),
+                ..
+            }) => Some(Msg::EditTodo),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('a'),
+                ..
+            }) => Some(Msg::AddTodo),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('d'),
+                ..
+            }) => Some(Msg::RemoveTodo),
             Event::Keyboard(KeyEvent { code: _, .. }) => self.maybe_scroll_todo_list(ev),
-            _ => None,
+            _ => Some(Msg::None),
         }
     }
 }
 
 impl TodoList {
+    pub fn new(todos: Vec<Todo>, index: usize) -> Self {
+        let mut list = TodoList::default();
+
+        if !todos.is_empty() {
+            list.component.attr(
+                Attribute::Value,
+                AttrValue::Payload(PropPayload::One(PropValue::Usize(index))),
+            );
+        }
+
+        list.component.attr(
+            Attribute::Content,
+            AttrValue::Table(Self::build_table_todo(todos)),
+        );
+        
+        list
+    }
+
     fn maybe_scroll_todo_list(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
         if let Changed(state) = maybe_scroll_list(&mut self.component, ev) {
             return Some(Msg::TodoSelected(state.unwrap_one().unwrap_usize()));
@@ -221,22 +276,68 @@ impl TodoList {
     }
 }
 
+pub enum EditPopupType {
+    Note,
+    Todo,
+}
 #[derive(MockComponent)]
 pub struct EditPopup {
     component: Input,
+    edit_type: EditPopupType,
 }
 
 impl Component<Msg, AppEvent> for EditPopup {
     fn on(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
+        //Data edit logic
+        let _ = match ev {
+            Event::Keyboard(KeyEvent {
+                code: Key::Left, ..
+            }) => self.perform(Cmd::Move(Direction::Left)),
+            Event::Keyboard(KeyEvent {
+                code: Key::Right, ..
+            }) => self.perform(Cmd::Move(Direction::Right)),
+            Event::Keyboard(KeyEvent {
+                code: Key::Home, ..
+            }) => self.perform(Cmd::GoTo(Position::Begin)),
+            Event::Keyboard(KeyEvent { code: Key::End, .. }) => {
+                self.perform(Cmd::GoTo(Position::End))
+            }
+            Event::Keyboard(KeyEvent {
+                code: Key::Delete, ..
+            }) => self.perform(Cmd::Cancel),
+            Event::Keyboard(KeyEvent {
+                code: Key::Backspace,
+                ..
+            }) => self.perform(Cmd::Delete),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char(ch),
+                modifiers: KeyModifiers::NONE,
+            }) => self.perform(Cmd::Type(ch)),
+
+            _ => CmdResult::None,
+        };
         match ev {
-            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => return Some(Msg::TodoListBlur),
-            _ => None,
+            Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => match self.edit_type {
+                EditPopupType::Note => Some(Msg::CloseEditNote(None)),
+                EditPopupType::Todo => Some(Msg::CloseEditTodo(None)),
+            },
+            Event::Keyboard(KeyEvent {
+                code: Key::Enter, ..
+            }) => {
+                let data = self.component.state().unwrap_one().unwrap_string();
+                match self.edit_type {
+                    EditPopupType::Note => Some(Msg::CloseEditNote(Some(data))),
+                    EditPopupType::Todo => Some(Msg::CloseEditTodo(Some(data))),
+                }
+            }
+
+            _ => Some(Msg::None),
         }
     }
 }
 
 impl EditPopup {
-    pub fn new(data: &str) -> Self {
+    pub fn new(data: &str, title: &str, edit_type: EditPopupType) -> Self {
         EditPopup {
             component: Input::default()
                 .borders(
@@ -246,9 +347,10 @@ impl EditPopup {
                 )
                 .foreground(Color::LightYellow)
                 .input_type(InputType::Text)
-                //.title("Username", Alignment::Left)
-                .value("veeso")
+                .title(title, Alignment::Left)
+                .value(data)
                 .invalid_style(Style::default().fg(Color::Red)),
+            edit_type,
         }
     }
 }

@@ -8,19 +8,20 @@ use std::{
 use tuirealm::{
     event::{Key, KeyEvent, KeyModifiers},
     listener::{ListenerResult, Poll},
+    props::{PropPayload, PropValue},
     terminal::TerminalBridge,
     tui::{
         layout::{Constraint, Direction, Layout},
         prelude::Rect,
         widgets::Clear,
     },
-    Application, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause, SubEventClause,
-    Update,
+    Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
+    SubEventClause, Update,
 };
 
 use crate::{
     backend::{NotesWall, NotesWallBuilder},
-    components::{EditPopup, NoteList, PhantomListener, ShortcutsLegend, TodoList},
+    components::{EditPopup, EditPopupType, NoteList, PhantomListener, ShortcutsLegend, TodoList},
     AppEvent, Id, Msg,
 };
 
@@ -29,7 +30,9 @@ type SharedWall = Arc<RwLock<NotesWall>>;
 pub struct Model {
     quit: bool,   // Becomes true when the user presses <ESC>
     redraw: bool, // Tells whether to refresh the UI; performance optimization
-    text_edit_popup: bool,
+    text_edit_popup_open: bool,
+    selected_note_index: usize,
+    selected_todo_index: usize,
     notes_wall: SharedWall,
     terminal: TerminalBridge,
     app: Application<Id, Msg, AppEvent>,
@@ -39,7 +42,9 @@ impl Default for Model {
     fn default() -> Self {
         let quit = false;
         let redraw = true;
-        let text_edit_popup = false;
+        let text_edit_popup_open = false;
+        let selected_note_index = 0;
+        let selected_todo_index = 0;
         let notes_wall = Arc::new(RwLock::new(
             NotesWallBuilder::default()
                 .folder_path(Path::new("/tmp/test_todotui").to_path_buf())
@@ -92,7 +97,9 @@ impl Default for Model {
         Self {
             quit,
             redraw,
-            text_edit_popup,
+            text_edit_popup_open,
+            selected_note_index,
+            selected_todo_index,
             terminal,
             app,
             notes_wall,
@@ -106,7 +113,7 @@ impl Model {
             // Tick
             if let Ok(messages) = self.app.tick(PollStrategy::Once) {
                 messages.iter().map(Some).for_each(|msg| {
-                    let mut msg = msg.copied();
+                    let mut msg = msg.cloned();
                     while msg.is_some() {
                         msg = self.update(msg);
                     }
@@ -142,7 +149,7 @@ impl Model {
             self.app.view(&Id::InfoBox, f, sub_chunk[1]);
             self.app.view(&Id::TodoList, f, main_chunks[1]);
 
-            if self.text_edit_popup {
+            if self.text_edit_popup_open {
                 let popup = Self::draw_area_in_absolute(f.size(), 30, 3);
                 f.render_widget(Clear, popup);
                 self.app.view(&Id::EditPopup, f, popup);
@@ -181,12 +188,22 @@ impl Update<Msg> for Model {
         self.redraw = true;
         match msg.unwrap_or(Msg::None) {
             Msg::AppClose => {
-                self.quit = true;
+                if !self.text_edit_popup_open {
+                    self.quit = true;
+                }
                 None
             }
+            Msg::CloseEditNote(data) => self.update_note_title(data),
+            Msg::CloseEditTodo(data) => self.update_note_todo(data),
             Msg::None => None,
-            Msg::NoteSelected(index) => self.update_todo_list(index),
-            Msg::TodoSelected(_) => None,
+            Msg::NoteSelected(index) => {
+                self.selected_note_index = index;
+                self.remount_todo_list(false)
+            }
+            Msg::TodoSelected(index) => {
+                self.selected_todo_index = index;
+                None
+            }
             Msg::NoteListBlur => {
                 assert!(self.app.active(&Id::TodoList).is_ok());
                 None
@@ -195,45 +212,184 @@ impl Update<Msg> for Model {
                 assert!(self.app.active(&Id::NoteList).is_ok());
                 None
             }
-            Msg::EditNote(index) => self.prepare_note_edit_popup(index),
+            Msg::EditNote => self.prepare_note_edit_popup(),
+            Msg::AddNote => self.add_note(),
+            Msg::RemoveNote => self.remove_note(),
+            Msg::ReloadNoteList => self.remount_note_list(),
+            Msg::ReloadTodoList => self.remount_todo_list(true),
+            Msg::EditTodo => self.prepare_todo_edit_popup(),
+            Msg::AddTodo => self.add_todo(),
+            Msg::RemoveTodo => self.remove_todo(),
         }
     }
 }
 
 impl Model {
-    
-    fn prepare_note_edit_popup(&mut self, index: usize) -> Option<Msg> {
-        if let Some(note) = self.notes_wall.read().unwrap().get_notes().get(index) {
-            self.text_edit_popup = true;
+    fn remove_todo(&mut self) -> Option<Msg> {
+        // let mut guard = self.notes_wall.write().unwrap();
+        // if let Some(note) = guard.get_notes().get(self.selected_note_index) {
+        //     // assert!(note.);
+        //     // self.selected_note_index = 0;
+        // }
+        todo!()
+        //Some(Msg::ReloadTodoList)
+    }
+
+    fn remove_note(&mut self) -> Option<Msg> {
+        let mut guard = self.notes_wall.write().unwrap();
+        if let Some(note) = guard.get_notes().get(self.selected_note_index) {
+            assert!(guard.remove_note(note).is_ok());
+            self.selected_note_index = 0;
+        }
+        Some(Msg::ReloadNoteList)
+    }
+
+    fn add_note(&mut self) -> Option<Msg> {
+        self.selected_note_index = self.notes_wall.read().unwrap().get_notes().len();
+        self.notes_wall.write().unwrap().create_note();
+        Some(Msg::EditNote)
+    }
+
+    fn add_todo(&mut self) -> Option<Msg> {
+        let guard = self.notes_wall.write().unwrap();
+        match guard.get_notes()[self.selected_note_index].create_todo() {
+            Ok(_) => {
+                self.selected_todo_index =
+                    guard.get_notes()[self.selected_note_index].todos().len() - 1;
+                Some(Msg::EditTodo)
+            }
+            Err(_) => None,
+        }
+    }
+
+    fn update_note_todo(&mut self, description: Option<String>) -> Option<Msg> {
+        self.text_edit_popup_open = false;
+        assert!(self.app.umount(&Id::EditPopup).is_ok());
+        if let Some(description) = description {
+            if let Some(note) = self
+                .notes_wall
+                .read()
+                .unwrap()
+                .get_notes()
+                .get(self.selected_note_index)
+            {
+                let _ = note.todos()[self.selected_todo_index].set_description(&description);
+                assert!(note.save().is_ok());
+            }
+        }
+        Some(Msg::ReloadTodoList)
+    }
+
+    fn update_note_title(&mut self, title: Option<String>) -> Option<Msg> {
+        self.text_edit_popup_open = false;
+        assert!(self.app.umount(&Id::EditPopup).is_ok());
+
+        if let Some(title) = title {
+            if let Some(note) = self
+                .notes_wall
+                .read()
+                .unwrap()
+                .get_notes()
+                .get(self.selected_note_index)
+            {
+                let _ = note.set_title(&title);
+                assert!(note.save().is_ok());
+            }
+        }
+
+        Some(Msg::ReloadNoteList)
+    }
+
+    fn remount_note_list(&mut self) -> Option<Msg> {
+        assert!(self
+            .app
+            .remount(
+                Id::NoteList,
+                Box::new(NoteList::new(
+                    self.notes_wall.read().unwrap().get_notes(),
+                    self.selected_note_index
+                )),
+                vec![]
+            )
+            .is_ok());
+        assert!(self.app.active(&Id::NoteList).is_ok());
+
+        None
+    }
+
+    fn prepare_note_edit_popup(&mut self) -> Option<Msg> {
+        if let Some(note) = self
+            .notes_wall
+            .read()
+            .unwrap()
+            .get_notes()
+            .get(self.selected_note_index)
+        {
+            self.text_edit_popup_open = true;
             assert!(self
                 .app
-                .remount(Id::EditPopup, Box::new(EditPopup::new(&note.title().unwrap())), vec![])
+                .remount(
+                    Id::EditPopup,
+                    Box::new(EditPopup::new(
+                        &note.title().unwrap(),
+                        "Title",
+                        EditPopupType::Note
+                    )),
+                    vec![]
+                )
                 .is_ok());
             assert!(self.app.active(&Id::EditPopup).is_ok());
         }
         None
     }
 
-    fn update_todo_list(&mut self, index: usize) -> Option<Msg> {
-        assert!(self
-            .app
-            .remount(Id::TodoList, Box::<TodoList>::default(), vec![])
-            .is_ok());
-        if let Some(note) = self.notes_wall.read().unwrap().get_notes().get(index) {
-            let todos = note.todos();
-            if todos.is_empty() {
-                return None;
-            }
+    fn prepare_todo_edit_popup(&mut self) -> Option<Msg> {
+        if let Some(note) = self
+            .notes_wall
+            .read()
+            .unwrap()
+            .get_notes()
+            .get(self.selected_note_index)
+        {
+            self.text_edit_popup_open = true;
             assert!(self
                 .app
-                .attr(
-                    &Id::TodoList,
-                    Attribute::Content,
-                    tuirealm::AttrValue::Table(TodoList::build_table_todo(note.todos())),
+                .remount(
+                    Id::EditPopup,
+                    Box::new(EditPopup::new(
+                        &note.todos()[self.selected_todo_index]
+                            .description()
+                            .unwrap(),
+                        "ToDo",
+                        EditPopupType::Todo
+                    )),
+                    vec![]
                 )
                 .is_ok());
+            assert!(self.app.active(&Id::EditPopup).is_ok());
         }
+        None
+    }
 
+    fn remount_todo_list(&mut self, focus: bool) -> Option<Msg> {
+        
+        if let Some(note) = self
+            .notes_wall
+            .read()
+            .unwrap()
+            .get_notes()
+            .get(self.selected_note_index)
+        {
+            let todos = note.todos();
+            assert!(self
+                .app
+                .remount(Id::TodoList, Box::new(TodoList::new(todos, self.selected_todo_index)), vec![])
+                .is_ok());
+    
+            if focus {
+                assert!(self.app.active(&Id::TodoList).is_ok());
+            }
+        }
         None
     }
 }

@@ -13,15 +13,24 @@ enum Id {
     EditPopup,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 enum Msg {
     AppClose,
     None,
     NoteSelected(usize),
     TodoSelected(usize),
-    EditNote(usize),
+    EditNote,
+    AddNote,
+    RemoveNote,
+    CloseEditNote(Option<String>),
+    CloseEditTodo(Option<String>),
     NoteListBlur,
     TodoListBlur,
+    ReloadNoteList,
+    ReloadTodoList,
+    EditTodo,
+    AddTodo,
+    RemoveTodo,
 }
 
 #[derive(PartialEq, Eq, Clone, PartialOrd)]
@@ -29,4 +38,3 @@ pub enum AppEvent {
     ErrorInitiliazed,
     NoteLoaded(Vec<Note>),
 }
-

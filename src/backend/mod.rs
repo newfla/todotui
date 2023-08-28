@@ -211,7 +211,7 @@ impl Note {
         }
     }
 
-    pub fn title(&self) -> Result<String, &'static str>  {
+    pub fn title(&self) -> Result<String, &'static str> {
         match self.title_internal() {
             Ok(title) => match title.is_empty() {
                 true => Ok(self.created().unwrap()),
@@ -297,7 +297,7 @@ impl Note {
         }
     }
 
-    fn save(&self) -> io::Result<()> {
+    pub fn save(&self) -> io::Result<()> {
         let (note, path) = {
             let data_guard = self.0.read().unwrap();
             (data_guard.note.clone(), data_guard.path.clone())
@@ -364,8 +364,8 @@ impl NotesWall {
         note
     }
 
-    pub fn remove_note(&mut self, note: Note) -> io::Result<()> {
-        let index = self.notes.iter().position(|e| e == &note);
+    pub fn remove_note(&mut self, note: &Note) -> io::Result<()> {
+        let index = self.notes.iter().position(|e| e == note);
         match index {
             Some(index) => {
                 self.notes.remove(index);
@@ -379,7 +379,7 @@ impl NotesWall {
         }
     }
 
-    pub fn save_all(&self) -> io::Result<()> {
+    fn save_all(&self) -> io::Result<()> {
         let mut status = Ok(());
         for e in self.notes.iter() {
             let result = e.save();
