@@ -31,6 +31,7 @@ enum Msg {
     EditTodo,
     AddTodo,
     RemoveTodo,
+    SwitchTodoStatus,
 }
 
 #[derive(PartialEq, Eq, Clone, PartialOrd)]

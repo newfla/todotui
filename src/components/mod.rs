@@ -7,8 +7,7 @@ use tuirealm::{
     },
     event::{Key, KeyEvent, KeyModifiers},
     props::{
-        Alignment, BorderType, Borders, Color, InputType, PropPayload, PropValue, Style, Table,
-        TableBuilder, TextSpan,
+        Alignment, BorderType, Borders, Color, InputType, Style, Table, TableBuilder, TextSpan,
     },
     AttrValue, Attribute, Component, Event, MockComponent,
 };
@@ -80,7 +79,7 @@ impl Component<Msg, AppEvent> for NoteList {
                 }
                 self.component.attr(
                     Attribute::Content,
-                    AttrValue::Table(Self::build_table_list(data)),
+                    AttrValue::Table(Self::build_table_note(data)),
                 );
                 Some(NoteSelected(
                     self.component.state().unwrap_one().unwrap_usize(),
@@ -92,19 +91,6 @@ impl Component<Msg, AppEvent> for NoteList {
 }
 
 impl NoteList {
-    pub fn new(notes: Vec<Note>, index: usize) -> Self {
-        let mut list = NoteList::default();
-
-        list.component.attr(
-            Attribute::Content,
-            AttrValue::Table(Self::build_table_list(notes)),
-        );
-        list.component.attr(
-            Attribute::Value,
-            AttrValue::Payload(PropPayload::One(PropValue::Usize(index))),
-        );
-        list
-    }
     fn maybe_scroll_note_list(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
         if let Changed(state) = maybe_scroll_list(&mut self.component, ev) {
             return Some(NoteSelected(state.unwrap_one().unwrap_usize()));
@@ -112,7 +98,7 @@ impl NoteList {
         None
     }
 
-    fn build_table_list(notes: Vec<Note>) -> Table {
+    pub fn build_table_note(notes: Vec<Note>) -> Table {
         let mut table = TableBuilder::default();
 
         notes.iter().enumerate().for_each(|(index, note)| {
@@ -165,6 +151,10 @@ impl Default for ShortcutsLegend {
                         .add_col(TextSpan::from(" E").bold())
                         .add_col(TextSpan::from("    "))
                         .add_col(TextSpan::from("Edit note/item"))
+                        .add_row()
+                        .add_col(TextSpan::from(" S").bold())
+                        .add_col(TextSpan::from("    "))
+                        .add_col(TextSpan::from("Switch item status"))
                         .add_row()
                         .add_col(TextSpan::from(" D").bold())
                         .add_col(TextSpan::from("    "))
@@ -220,6 +210,10 @@ impl Component<Msg, AppEvent> for TodoList {
                 code: Key::Char('d'),
                 ..
             }) => Some(Msg::RemoveTodo),
+            Event::Keyboard(KeyEvent {
+                code: Key::Char('s'),
+                ..
+            }) => Some(Msg::SwitchTodoStatus),
             Event::Keyboard(KeyEvent { code: _, .. }) => self.maybe_scroll_todo_list(ev),
             _ => Some(Msg::None),
         }
@@ -227,24 +221,6 @@ impl Component<Msg, AppEvent> for TodoList {
 }
 
 impl TodoList {
-    pub fn new(todos: Vec<Todo>, index: usize) -> Self {
-        let mut list = TodoList::default();
-
-        if !todos.is_empty() {
-            list.component.attr(
-                Attribute::Value,
-                AttrValue::Payload(PropPayload::One(PropValue::Usize(index))),
-            );
-        }
-
-        list.component.attr(
-            Attribute::Content,
-            AttrValue::Table(Self::build_table_todo(todos)),
-        );
-        
-        list
-    }
-
     fn maybe_scroll_todo_list(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
         if let Changed(state) = maybe_scroll_list(&mut self.component, ev) {
             return Some(Msg::TodoSelected(state.unwrap_one().unwrap_usize()));

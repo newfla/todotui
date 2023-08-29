@@ -8,7 +8,6 @@ use std::{
 use tuirealm::{
     event::{Key, KeyEvent, KeyModifiers},
     listener::{ListenerResult, Poll},
-    props::{PropPayload, PropValue},
     terminal::TerminalBridge,
     tui::{
         layout::{Constraint, Direction, Layout},
@@ -16,7 +15,7 @@ use tuirealm::{
         widgets::Clear,
     },
     Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
-    SubEventClause, Update,
+    SubEventClause, Update, props::{PropPayload, PropValue},
 };
 
 use crate::{
@@ -198,7 +197,7 @@ impl Update<Msg> for Model {
             Msg::None => None,
             Msg::NoteSelected(index) => {
                 self.selected_note_index = index;
-                self.remount_todo_list(false)
+                self.reload_todo_list()
             }
             Msg::TodoSelected(index) => {
                 self.selected_todo_index = index;
@@ -215,24 +214,43 @@ impl Update<Msg> for Model {
             Msg::EditNote => self.prepare_note_edit_popup(),
             Msg::AddNote => self.add_note(),
             Msg::RemoveNote => self.remove_note(),
-            Msg::ReloadNoteList => self.remount_note_list(),
-            Msg::ReloadTodoList => self.remount_todo_list(true),
+            Msg::ReloadNoteList => self.reload_note_list(),
+            Msg::ReloadTodoList => self.reload_todo_list(),
             Msg::EditTodo => self.prepare_todo_edit_popup(),
             Msg::AddTodo => self.add_todo(),
             Msg::RemoveTodo => self.remove_todo(),
+            Msg::SwitchTodoStatus => self.switch_todo_status(),
         }
     }
 }
 
 impl Model {
+    fn switch_todo_status(&mut self) -> Option<Msg> {
+        let guard = self.notes_wall.write().unwrap();
+        if let Some(note) = guard.get_notes().get_mut(self.selected_note_index) {
+            if let Some(todo) = note.todos().get(self.selected_todo_index) {
+                let new_done = match todo.done().unwrap() {
+                    Some(true) => Some(false),
+                    Some(false) => None,
+                    None => Some(true),
+                };
+                assert!(todo.set_done(new_done).is_ok());
+                assert!(note.save().is_ok());
+            }
+        }
+        Some(Msg::ReloadTodoList)
+    }
+
     fn remove_todo(&mut self) -> Option<Msg> {
-        // let mut guard = self.notes_wall.write().unwrap();
-        // if let Some(note) = guard.get_notes().get(self.selected_note_index) {
-        //     // assert!(note.);
-        //     // self.selected_note_index = 0;
-        // }
-        todo!()
-        //Some(Msg::ReloadTodoList)
+        let guard = self.notes_wall.write().unwrap();
+        if let Some(note) = guard.get_notes().get_mut(self.selected_note_index) {
+            if let Some(todo) = note.todos().get(self.selected_todo_index) {
+                assert!(note.remove_todo(todo).is_ok());
+                assert!(note.save().is_ok());
+                self.selected_todo_index = 0;
+            }
+        }
+        Some(Msg::ReloadTodoList)
     }
 
     fn remove_note(&mut self) -> Option<Msg> {
@@ -300,21 +318,29 @@ impl Model {
         Some(Msg::ReloadNoteList)
     }
 
-    fn remount_note_list(&mut self) -> Option<Msg> {
+    fn reload_note_list(&mut self) -> Option<Msg> {
         assert!(self
             .app
-            .remount(
-                Id::NoteList,
-                Box::new(NoteList::new(
-                    self.notes_wall.read().unwrap().get_notes(),
-                    self.selected_note_index
-                )),
-                vec![]
+            .attr(
+                &Id::NoteList,
+                Attribute::Content,
+                AttrValue::Table(NoteList::build_table_note(
+                    self.notes_wall.read().unwrap().get_notes()
+                ))
             )
             .is_ok());
-        assert!(self.app.active(&Id::NoteList).is_ok());
 
-        None
+        assert!(self
+            .app
+            .attr(
+                &Id::NoteList,
+                Attribute::Value,
+                AttrValue::Payload(PropPayload::One(PropValue::Usize(self.selected_note_index)))
+            )
+            .is_ok());
+
+        self.selected_todo_index = 0;
+        Some(Msg::ReloadTodoList)
     }
 
     fn prepare_note_edit_popup(&mut self) -> Option<Msg> {
@@ -351,28 +377,27 @@ impl Model {
             .get_notes()
             .get(self.selected_note_index)
         {
-            self.text_edit_popup_open = true;
-            assert!(self
-                .app
-                .remount(
-                    Id::EditPopup,
-                    Box::new(EditPopup::new(
-                        &note.todos()[self.selected_todo_index]
-                            .description()
-                            .unwrap(),
-                        "ToDo",
-                        EditPopupType::Todo
-                    )),
-                    vec![]
-                )
-                .is_ok());
-            assert!(self.app.active(&Id::EditPopup).is_ok());
+            if let Some(todo) = note.todos().get(self.selected_todo_index) {
+                self.text_edit_popup_open = true;
+                assert!(self
+                    .app
+                    .remount(
+                        Id::EditPopup,
+                        Box::new(EditPopup::new(
+                            &todo.description().unwrap(),
+                            "ToDo",
+                            EditPopupType::Todo
+                        )),
+                        vec![]
+                    )
+                    .is_ok());
+                assert!(self.app.active(&Id::EditPopup).is_ok());
+            }
         }
         None
     }
 
-    fn remount_todo_list(&mut self, focus: bool) -> Option<Msg> {
-        
+    fn reload_todo_list(&mut self) -> Option<Msg> {
         if let Some(note) = self
             .notes_wall
             .read()
@@ -380,15 +405,23 @@ impl Model {
             .get_notes()
             .get(self.selected_note_index)
         {
-            let todos = note.todos();
             assert!(self
                 .app
-                .remount(Id::TodoList, Box::new(TodoList::new(todos, self.selected_todo_index)), vec![])
+                .attr(
+                    &Id::TodoList,
+                    Attribute::Content,
+                    AttrValue::Table(TodoList::build_table_todo(note.todos()))
+                )
                 .is_ok());
-    
-            if focus {
-                assert!(self.app.active(&Id::TodoList).is_ok());
-            }
+
+                assert!(self
+                    .app
+                    .attr(
+                        &Id::TodoList,
+                        Attribute::Value,
+                        AttrValue::Payload(PropPayload::One(PropValue::Usize(self.selected_todo_index)))
+                    )
+                    .is_ok());
         }
         None
     }

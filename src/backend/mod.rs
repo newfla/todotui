@@ -119,8 +119,8 @@ impl InternalNote {
         self.todos.push(todo)
     }
 
-    fn remove_todo(&mut self, todo: Todo) {
-        let index = self.todos.iter().position(|e| e == &todo);
+    fn remove_todo(&mut self, todo: &Todo) {
+        let index = self.todos.iter().position(|e| e == todo);
         if let Some(index) = index {
             self.todos.remove(index);
         }
@@ -255,7 +255,7 @@ impl Note {
         }
     }
 
-    pub fn remove_todo(&mut self, todo: Todo) -> Result<(), &'static str> {
+    pub fn remove_todo(&mut self, todo: &Todo) -> Result<(), &'static str> {
         match self.0.write() {
             Ok(mut data_guard) => match data_guard.note.as_mut() {
                 Some(note) => {
