@@ -1,6 +1,6 @@
 use std::{
     io,
-    path::Path,
+    path::PathBuf,
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -37,8 +37,9 @@ pub struct Model {
     app: Application<Id, Msg, AppEvent>,
 }
 
-impl Default for Model {
-    fn default() -> Self {
+
+impl Model {
+    pub fn new(path: PathBuf) -> Self {
         let quit = false;
         let redraw = true;
         let text_edit_popup_open = false;
@@ -46,7 +47,7 @@ impl Default for Model {
         let selected_todo_index = 0;
         let notes_wall = Arc::new(RwLock::new(
             NotesWallBuilder::default()
-                .folder_path(Path::new("/tmp/test_todotui").to_path_buf())
+                .folder_path(path)
                 .build()
                 .unwrap(),
         ));
@@ -104,9 +105,7 @@ impl Default for Model {
             notes_wall,
         }
     }
-}
 
-impl Model {
     pub fn main_loop(&mut self) {
         while !self.quit {
             // Tick
