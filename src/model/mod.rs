@@ -8,6 +8,7 @@ use std::{
 use tuirealm::{
     event::{Key, KeyEvent, KeyModifiers},
     listener::{ListenerResult, Poll},
+    props::{PropPayload, PropValue},
     terminal::TerminalBridge,
     tui::{
         layout::{Constraint, Direction, Layout},
@@ -15,7 +16,7 @@ use tuirealm::{
         widgets::Clear,
     },
     Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
-    SubEventClause, Update, props::{PropPayload, PropValue},
+    SubEventClause, Update,
 };
 
 use crate::{
@@ -36,7 +37,6 @@ pub struct Model {
     terminal: TerminalBridge,
     app: Application<Id, Msg, AppEvent>,
 }
-
 
 impl Model {
     pub fn new(path: PathBuf) -> Self {
@@ -413,14 +413,16 @@ impl Model {
                 )
                 .is_ok());
 
-                assert!(self
-                    .app
-                    .attr(
-                        &Id::TodoList,
-                        Attribute::Value,
-                        AttrValue::Payload(PropPayload::One(PropValue::Usize(self.selected_todo_index)))
-                    )
-                    .is_ok());
+            assert!(self
+                .app
+                .attr(
+                    &Id::TodoList,
+                    Attribute::Value,
+                    AttrValue::Payload(PropPayload::One(PropValue::Usize(
+                        self.selected_todo_index
+                    )))
+                )
+                .is_ok());
         }
         None
     }
