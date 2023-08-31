@@ -152,10 +152,6 @@ impl Default for ShortcutsLegend {
                         .add_col(TextSpan::from("    "))
                         .add_col(TextSpan::from("Edit note/item"))
                         .add_row()
-                        .add_col(TextSpan::from(" S").bold())
-                        .add_col(TextSpan::from("    "))
-                        .add_col(TextSpan::from("Switch item status"))
-                        .add_row()
                         .add_col(TextSpan::from(" D").bold())
                         .add_col(TextSpan::from("    "))
                         .add_col(TextSpan::from("Delete note/item"))
@@ -211,7 +207,7 @@ impl Component<Msg, AppEvent> for TodoList {
                 ..
             }) => Some(Msg::RemoveTodo),
             Event::Keyboard(KeyEvent {
-                code: Key::Char('s'),
+                code: Key::Char(' '),
                 ..
             }) => Some(Msg::SwitchTodoStatus),
             Event::Keyboard(KeyEvent { code: _, .. }) => self.maybe_scroll_todo_list(ev),
