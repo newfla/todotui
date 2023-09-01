@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 use backend::Note;
 
 mod backend;
@@ -35,7 +36,7 @@ enum Msg {
 }
 
 #[derive(PartialEq, Eq, Clone, PartialOrd)]
-pub enum AppEvent {
+enum AppEvent {
     ErrorInitiliazed,
     NoteLoaded(Vec<Note>),
 }

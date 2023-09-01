@@ -2,8 +2,14 @@
 name = "todotui"
 version = "0.0.1"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Flavio Bizzarri <fl.bizzarri@gmail.com>"]
+license = "Apache-2.0"
+description = "A simple todo terminal app"
+readme = "README.md"
+homepage = "https://github.com/newfla/todotui"
+repository = "https://github.com/newfla/todotui"
+keywords = ["todo", "tui", "notes"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 derive_builder = "0.12"
