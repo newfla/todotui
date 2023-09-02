@@ -269,14 +269,13 @@ impl Model {
 
     fn add_todo(&mut self) -> Option<Msg> {
         let guard = self.notes_wall.write().unwrap();
-        match guard.get_notes()[self.selected_note_index].create_todo() {
-            Ok(_) => {
-                self.selected_todo_index =
-                    guard.get_notes()[self.selected_note_index].todos().len() - 1;
-                Some(Msg::EditTodo)
+        if let Some(note) = guard.get_notes().get_mut(self.selected_note_index) {
+            if let Ok(_) = note.create_todo() {
+                self.selected_todo_index = note.todos().len() - 1;
+                return Some(Msg::EditTodo);
             }
-            Err(_) => None,
         }
+        None
     }
 
     fn update_note_todo(&mut self, description: Option<String>) -> Option<Msg> {
@@ -397,32 +396,42 @@ impl Model {
     }
 
     fn reload_todo_list(&mut self) -> Option<Msg> {
-        if let Some(note) = self
+        match self
             .notes_wall
             .read()
             .unwrap()
             .get_notes()
             .get(self.selected_note_index)
         {
-            assert!(self
+            Some(note) => {
+                assert!(self
+                    .app
+                    .attr(
+                        &Id::TodoList,
+                        Attribute::Content,
+                        AttrValue::Table(TodoList::build_table_todo(note.todos()))
+                    )
+                    .is_ok());
+
+                assert!(self
+                    .app
+                    .attr(
+                        &Id::TodoList,
+                        Attribute::Value,
+                        AttrValue::Payload(PropPayload::One(PropValue::Usize(
+                            self.selected_todo_index
+                        )))
+                    )
+                    .is_ok());
+            }
+            None => assert!(self
                 .app
                 .attr(
                     &Id::TodoList,
                     Attribute::Content,
-                    AttrValue::Table(TodoList::build_table_todo(note.todos()))
+                    AttrValue::Table(TodoList::build_table_todo(vec![]))
                 )
-                .is_ok());
-
-            assert!(self
-                .app
-                .attr(
-                    &Id::TodoList,
-                    Attribute::Value,
-                    AttrValue::Payload(PropPayload::One(PropValue::Usize(
-                        self.selected_todo_index
-                    )))
-                )
-                .is_ok());
+                .is_ok()),
         }
         None
     }

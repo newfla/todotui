@@ -99,6 +99,9 @@ impl NoteList {
     }
 
     pub fn build_table_note(notes: Vec<Note>) -> Table {
+        if notes.is_empty() {
+            return vec![];
+        }
         let mut table = TableBuilder::default();
 
         notes.iter().enumerate().for_each(|(index, note)| {
@@ -225,6 +228,9 @@ impl TodoList {
     }
 
     pub fn build_table_todo(todos: Vec<Todo>) -> Table {
+        if todos.is_empty() {
+            return vec![];
+        }
         let mut table = TableBuilder::default();
 
         todos.iter().enumerate().for_each(|(index, todo)| {
