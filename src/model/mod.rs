@@ -454,13 +454,11 @@ impl Poll<AppEvent> for NotesProvider {
     fn poll(&mut self) -> ListenerResult<Option<Event<AppEvent>>> {
         if let Some(result) = self.init.take() {
             return match result {
-                Ok(_) => {
-                    Ok(Some(Event::User(AppEvent::NoteLoaded(
-                        self.wall.read().unwrap().get_notes(),
-                    ))))
-                }
+                Ok(_) => Ok(Some(Event::User(AppEvent::NoteLoaded(
+                    self.wall.read().unwrap().get_notes(),
+                )))),
                 Err(_) => Ok(Some(Event::User(AppEvent::ErrorInitialized))),
-            }
+            };
         };
 
         Ok(None)
