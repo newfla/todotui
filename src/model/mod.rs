@@ -84,7 +84,7 @@ impl Model {
                         SubClause::Always
                     ),
                     Sub::new(
-                        SubEventClause::User(AppEvent::ErrorInitiliazed),
+                        SubEventClause::User(AppEvent::ErrorInitialized),
                         SubClause::Always
                     )
                 ]
@@ -453,14 +453,12 @@ impl NotesProvider {
 impl Poll<AppEvent> for NotesProvider {
     fn poll(&mut self) -> ListenerResult<Option<Event<AppEvent>>> {
         if let Some(result) = self.init.take() {
-            match result {
-                Ok(_) => {
-                    return Ok(Some(Event::User(AppEvent::NoteLoaded(
-                        self.wall.read().unwrap().get_notes(),
-                    ))))
-                }
-                Err(_) => return Ok(Some(Event::User(AppEvent::ErrorInitiliazed))),
-            }
+            return match result {
+                Ok(_) => Ok(Some(Event::User(AppEvent::NoteLoaded(
+                    self.wall.read().unwrap().get_notes(),
+                )))),
+                Err(_) => Ok(Some(Event::User(AppEvent::ErrorInitialized))),
+            };
         };
 
         Ok(None)

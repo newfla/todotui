@@ -27,7 +27,7 @@ impl Component<Msg, AppEvent> for PhantomListener {
     fn on(&mut self, ev: Event<AppEvent>) -> Option<Msg> {
         let _ = match ev {
             Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => return Some(Msg::AppClose),
-            Event::User(AppEvent::ErrorInitiliazed) => return Some(Msg::AppClose),
+            Event::User(AppEvent::ErrorInitialized) => return Some(Msg::AppClose),
             _ => CmdResult::None,
         };
         Some(Msg::None)
@@ -240,11 +240,11 @@ impl TodoList {
                 None => ("❓", " "),
             };
 
-            let derscription = todo.description().unwrap();
+            let description = todo.description().unwrap();
             let row = table
                 .add_col(TextSpan::from(done))
                 .add_col(TextSpan::from(space))
-                .add_col(TextSpan::from(derscription));
+                .add_col(TextSpan::from(description));
 
             if index < todos.len() - 1 {
                 row.add_row();
