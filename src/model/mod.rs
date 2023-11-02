@@ -1,5 +1,4 @@
 use std::{
-    io,
     path::PathBuf,
     sync::{Arc, RwLock},
     time::Duration,
@@ -18,6 +17,8 @@ use tuirealm::{
     Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
     SubEventClause, Update,
 };
+
+use anyhow::Result;
 
 use crate::{
     backend::{NotesWall, NotesWallBuilder},
@@ -270,7 +271,11 @@ impl Model {
     fn add_todo(&mut self) -> Option<Msg> {
         let guard = self.notes_wall.write().unwrap();
         if let Some(note) = guard.get_notes().get_mut(self.selected_note_index) {
-            if let Ok(_) = note.create_todo() {
+            // note.create_todo().ok().map(|_| {
+            //     self.selected_todo_index = note.todos().len() - 1;
+            //     Some(Msg::EditTodo)
+            // });
+            if note.create_todo().is_ok() {
                 self.selected_todo_index = note.todos().len() - 1;
                 return Some(Msg::EditTodo);
             }
@@ -439,7 +444,7 @@ impl Model {
 
 struct NotesProvider {
     wall: SharedWall,
-    init: Option<io::Result<()>>,
+    init: Option<Result<()>>,
 }
 
 impl NotesProvider {
@@ -452,17 +457,11 @@ impl NotesProvider {
 
 impl Poll<AppEvent> for NotesProvider {
     fn poll(&mut self) -> ListenerResult<Option<Event<AppEvent>>> {
-        if let Some(result) = self.init.take() {
-            match result {
-                Ok(_) => {
-                    return Ok(Some(Event::User(AppEvent::NoteLoaded(
-                        self.wall.read().unwrap().get_notes(),
-                    ))))
-                }
-                Err(_) => return Ok(Some(Event::User(AppEvent::ErrorInitiliazed))),
-            }
-        };
-
-        Ok(None)
+        self.init.take().map_or(Ok(None), |result| match result {
+            Ok(_) => Ok(Some(Event::User(AppEvent::NoteLoaded(
+                self.wall.read().unwrap().get_notes(),
+            )))),
+            Err(_) => Ok(Some(Event::User(AppEvent::ErrorInitiliazed))),
+        })
     }
 }

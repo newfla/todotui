@@ -5,7 +5,7 @@ use home::home_dir;
 use todotui::model::Model;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None)]   
 struct Args {
     #[arg(short, long)]
     directory: Option<PathBuf>,
@@ -27,7 +27,7 @@ fn main() {
                     Err(err) => println!("{}", err),
                 }
             }
-            None => todo!(),
+            None => panic!("Home directory discovery failed :("),
         },
     };
 }

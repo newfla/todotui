@@ -1,12 +1,12 @@
 use std::{
     fs::{read, read_dir, remove_file, write},
     hash::Hash,
-    io::{self, Error},
     ops::Deref,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
 
+use anyhow::{bail, ensure, Context, Result};
 use chrono::Utc;
 use derive_builder::Builder;
 use postcard::{from_bytes, to_stdvec};
@@ -17,6 +17,7 @@ static FILE_EXTENSION: &str = "post";
 static POISONED: &str = "Poisoned mutex";
 static EMPTY_NOTE: &str = "Note is empty";
 static FAILED_SERIALIZATION: &str = "Failed to serialize";
+static FAILED_REMOVE: &str = "Failed to remove";
 
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct InternalTodo {
@@ -48,38 +49,30 @@ impl PartialOrd for Todo {
 }
 
 impl Todo {
-    pub fn done(&self) -> Result<Option<bool>, &'static str> {
-        match self.0.read() {
-            Ok(data) => Ok(data.done),
-            Err(_) => Err(POISONED),
-        }
+    pub fn done(&self) -> Result<Option<bool>> {
+        let lock = self.0.read();
+        ensure!(lock.is_ok(), POISONED);
+        Ok(lock.unwrap().done)
     }
 
-    pub fn set_done(&self, done: Option<bool>) -> Result<(), &'static str> {
-        match self.0.write() {
-            Ok(mut data) => {
-                data.done = done;
-                Ok(())
-            }
-            Err(_) => Err(POISONED),
-        }
+    pub fn set_done(&self, done: Option<bool>) -> Result<()> {
+        let lock = self.0.write();
+        ensure!(lock.is_ok(), POISONED);
+        lock.unwrap().done = done;
+        Ok(())
     }
 
-    pub fn description(&self) -> Result<String, &'static str> {
-        match self.0.read() {
-            Ok(data) => Ok(data.description.clone()),
-            Err(_) => Err(POISONED),
-        }
+    pub fn description(&self) -> Result<String> {
+        let lock = self.0.read();
+        ensure!(lock.is_ok(), POISONED);
+        Ok(lock.unwrap().description.clone())
     }
 
-    pub fn set_description(&self, description: &str) -> Result<(), &'static str> {
-        match self.0.write() {
-            Ok(mut data) => {
-                data.description = description.to_string();
-                Ok(())
-            }
-            Err(_) => Err(POISONED),
-        }
+    pub fn set_description(&self, description: &str) -> Result<()> {
+        let lock = self.0.write();
+        ensure!(lock.is_ok(), POISONED);
+        lock.unwrap().description = description.to_string();
+        Ok(())
     }
 }
 
@@ -188,30 +181,26 @@ impl Hash for Note {
 }
 
 impl Note {
-    fn set_path(&self, path: PathBuf) -> Result<(), &'static str> {
-        match self.0.write() {
-            Ok(mut data) => {
-                data.path = path;
+    fn set_path(&self, path: PathBuf) -> Result<()> {
+        let lock = self.0.write();
+        ensure!(lock.is_ok(), POISONED);
+        lock.unwrap().path = path;
+        Ok(())
+    }
+
+    pub fn set_title(&self, title: &str) -> Result<()> {
+        let lock = self.0.write();
+        ensure!(lock.is_ok(), POISONED);
+        match lock.unwrap().note.as_mut() {
+            Some(note) => {
+                note.title = title.to_string();
                 Ok(())
             }
-            Err(_) => Err(POISONED),
+            None => bail!(EMPTY_NOTE),
         }
     }
 
-    pub fn set_title(&self, title: &str) -> Result<(), &'static str> {
-        match self.0.write() {
-            Ok(mut data) => match data.note.as_mut() {
-                Some(note) => {
-                    note.title = title.to_string();
-                    Ok(())
-                }
-                None => Err(EMPTY_NOTE),
-            },
-            Err(_) => Err(POISONED),
-        }
-    }
-
-    pub fn title(&self) -> Result<String, &'static str> {
+    pub fn title(&self) -> Result<String> {
         match self.title_internal() {
             Ok(title) => match title.is_empty() {
                 true => Ok(self.created().unwrap()),
@@ -221,95 +210,83 @@ impl Note {
         }
     }
 
-    fn created(&self) -> Result<String, &'static str> {
-        match self.0.read() {
-            Ok(data_guard) => match &data_guard.note {
-                Some(data) => Ok(data.created.clone()),
-                None => Ok("".to_string()),
-            },
-            Err(_) => Err(POISONED),
+    fn created(&self) -> Result<String> {
+        let lock = self.0.read();
+        ensure!(lock.is_ok(), POISONED);
+        match &lock.unwrap().note {
+            Some(data) => Ok(data.created.clone()),
+            None => Ok("".to_string()),
         }
     }
 
-    fn title_internal(&self) -> Result<String, &'static str> {
-        match self.0.read() {
-            Ok(data_guard) => match &data_guard.note {
-                Some(data) => Ok(data.title.clone()),
-                None => Err(EMPTY_NOTE),
-            },
-            Err(_) => Err(POISONED),
+    fn title_internal(&self) -> Result<String> {
+        let lock = self.0.read();
+        ensure!(lock.is_ok(), POISONED);
+        match &lock.unwrap().note {
+            Some(data) => Ok(data.title.clone()),
+            None => bail!(EMPTY_NOTE),
         }
     }
 
-    pub fn create_todo(&mut self) -> Result<Todo, &'static str> {
-        match self.0.write() {
-            Ok(mut data_guard) => match data_guard.note.as_mut() {
-                Some(note) => {
-                    let todo = Todo::default();
-                    note.add_todo(todo.clone());
-                    Ok(todo)
-                }
-                None => Err(EMPTY_NOTE),
-            },
-            Err(_) => Err(POISONED),
+    pub fn create_todo(&mut self) -> Result<Todo> {
+        let lock = self.0.write();
+        ensure!(lock.is_ok(), POISONED);
+        match lock.unwrap().note.as_mut() {
+            Some(note) => {
+                let todo = Todo::default();
+                note.add_todo(todo.clone());
+                Ok(todo)
+            }
+            None => bail!(EMPTY_NOTE),
         }
     }
 
-    pub fn remove_todo(&mut self, todo: &Todo) -> Result<(), &'static str> {
-        match self.0.write() {
-            Ok(mut data_guard) => match data_guard.note.as_mut() {
-                Some(note) => {
-                    note.remove_todo(todo);
-                    Ok(())
-                }
-                None => Err(EMPTY_NOTE),
-            },
-            Err(_) => Err(POISONED),
+    pub fn remove_todo(&mut self, todo: &Todo) -> Result<()> {
+        let lock = self.0.write();
+        ensure!(lock.is_ok(), POISONED);
+        match lock.unwrap().note.as_mut() {
+            Some(note) => {
+                note.remove_todo(todo);
+                Ok(())
+            }
+            None => bail!(EMPTY_NOTE),
         }
     }
 
     pub fn todos(&self) -> Vec<Todo> {
-        match self.0.read() {
-            Ok(data_guard) => match &data_guard.note {
-                Some(data) => data.todos.to_vec(),
-                None => Vec::new(),
-            },
-            Err(_) => Vec::new(),
-        }
+        self.0.read().map_or(Vec::new(), |data| match &data.note {
+            Some(data) => data.todos.to_vec(),
+            None => Vec::new(),
+        })
     }
 
     fn load(&self) -> bool {
         let path = self.0.read().unwrap().path.clone();
-        let note = match read(path).map(|data| from_bytes(&data)) {
-            Ok(note) => note.ok(),
-            Err(_) => None,
-        };
-
-        match note {
-            Some(note) => match self.0.write() {
-                Ok(mut data) => {
-                    data.note = Some(note);
-                    true
-                }
+        read(path)
+            .map(|data| from_bytes::<InternalNote>(&data))
+            .map_or(false, |note| match note {
+                Ok(note) => match self.0.write() {
+                    Ok(mut data) => {
+                        data.note = Some(note);
+                        true
+                    }
+                    Err(_) => false,
+                },
                 Err(_) => false,
-            },
-            None => false,
-        }
+            })
     }
 
-    pub fn save(&self) -> io::Result<()> {
-        let (note, path) = {
-            let data_guard = self.0.read().unwrap();
-            (data_guard.note.clone(), data_guard.path.clone())
-        };
+    pub fn save(&self) -> Result<()> {
+        let lock = self.0.read().unwrap();
 
-        match note {
-            Some(note) => match to_stdvec(&note) {
-                Ok(data) => write(path, data),
-                Err(_) => Err(Error::new(io::ErrorKind::Other, FAILED_SERIALIZATION)),
-            },
-            None => Ok(()),
-        }
+        lock.note
+            .as_ref()
+            .map_or(Ok(()), |note| match to_stdvec(&note) {
+                std::result::Result::Ok(data) => {
+                    write(lock.path.clone(), data).context(FAILED_SERIALIZATION)
+                }
+                Err(_) => bail!(FAILED_SERIALIZATION),
+            })
     }
 }
 
@@ -321,7 +298,7 @@ pub struct NotesWall {
 }
 
 impl NotesWall {
-    pub fn init(&mut self) -> io::Result<()> {
+    pub fn init(&mut self) -> Result<()> {
         self.notes = read_dir(self.folder_path.as_path())?
             .filter(|file| {
                 file.as_ref().is_ok_and(|f| {
@@ -364,22 +341,21 @@ impl NotesWall {
         note
     }
 
-    pub fn remove_note(&mut self, note: &Note) -> io::Result<()> {
-        let index = self.notes.iter().position(|e| e == note);
-        match index {
-            Some(index) => {
+    pub fn remove_note(&mut self, note: &Note) -> Result<()> {
+        self.notes
+            .iter()
+            .position(|e| e == note)
+            .map_or(Ok(()), |index| {
                 self.notes.remove(index);
                 let path = {
                     let data_guard = note.0.read().unwrap();
                     data_guard.path.clone()
                 };
-                remove_file(path.as_path())
-            }
-            None => Ok(()),
-        }
+                remove_file(path.as_path()).context(FAILED_REMOVE)
+            })
     }
 
-    fn save_all(&self) -> io::Result<()> {
+    fn save_all(&self) -> Result<()> {
         let mut status = Ok(());
         for e in self.notes.iter() {
             let result = e.save();
