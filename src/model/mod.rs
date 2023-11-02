@@ -461,7 +461,7 @@ impl Poll<AppEvent> for NotesProvider {
             Ok(_) => Ok(Some(Event::User(AppEvent::NoteLoaded(
                 self.wall.read().unwrap().get_notes(),
             )))),
-            Err(_) => Ok(Some(Event::User(AppEvent::ErrorInitiliazed))),
+            Err(_) => Ok(Some(Event::User(AppEvent::ErrorInitialized))),
         })
     }
 }
