@@ -37,6 +37,6 @@ enum Msg {
 
 #[derive(PartialEq, Eq, Clone, PartialOrd)]
 enum AppEvent {
-    ErrorInitiliazed,
+    ErrorInitialized,
     NoteLoaded(Vec<Note>),
 }

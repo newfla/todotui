@@ -392,7 +392,7 @@ mod tests {
             .folder_path(Path::new(TEST_FOLDER_PATH).to_path_buf())
             .build()
             .unwrap();
-        let mut wall_2 = NotesWallBuilder::default()
+        let wall_2 = NotesWallBuilder::default()
             .folder_path(Path::new(TEST_FOLDER_PATH).to_path_buf())
             .build()
             .unwrap();

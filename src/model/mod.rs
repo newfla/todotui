@@ -85,7 +85,7 @@ impl Model {
                         SubClause::Always
                     ),
                     Sub::new(
-                        SubEventClause::User(AppEvent::ErrorInitiliazed),
+                        SubEventClause::User(AppEvent::ErrorInitialized),
                         SubClause::Always
                     )
                 ]
