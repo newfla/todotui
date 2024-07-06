@@ -7,8 +7,7 @@ use tuirealm::{
     },
     event::{Key, KeyEvent, KeyModifiers},
     props::{
-        Alignment, BorderType, Borders, Color, InputType, Style, Table, TableBuilder,
-        TextSpan,
+        Alignment, BorderType, Borders, Color, InputType, Style, Table, TableBuilder, TextSpan,
     },
     AttrValue, Attribute, Component, Event, MockComponent,
 };
