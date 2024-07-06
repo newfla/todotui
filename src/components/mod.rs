@@ -7,7 +7,8 @@ use tuirealm::{
     },
     event::{Key, KeyEvent, KeyModifiers},
     props::{
-        Alignment, BorderType, Borders, Color, InputType, Style, Table, TableBuilder, TextSpan,
+        Alignment, BorderType, Borders, Color, InputType, Style, Table, TableBuilder,
+        TextSpan,
     },
     AttrValue, Attribute, Component, Event, MockComponent,
 };
@@ -138,25 +139,25 @@ impl Default for ShortcutsLegend {
                         .add_col(TextSpan::from(" ESC").bold())
                         .add_col(TextSpan::from("  "))
                         .add_col(TextSpan::from("Quit the application"))
+                        .add_col(TextSpan::from("           "))
+                        .add_col(TextSpan::from(" A").bold())
+                        .add_col(TextSpan::from("  "))
+                        .add_col(TextSpan::from("Add note/item"))
                         .add_row()
                         .add_col(TextSpan::from(" TAB").bold())
                         .add_col(TextSpan::from("  "))
                         .add_col(TextSpan::from("Switch focus"))
+                        .add_col(TextSpan::from("                   "))
+                        .add_col(TextSpan::from(" E").bold())
+                        .add_col(TextSpan::from("  "))
+                        .add_col(TextSpan::from("Edit note/item"))
                         .add_row()
                         .add_col(TextSpan::from(" SPC").bold())
                         .add_col(TextSpan::from("  "))
                         .add_col(TextSpan::from("Cycle between item status"))
-                        .add_row()
-                        .add_col(TextSpan::from(" A").bold())
-                        .add_col(TextSpan::from("    "))
-                        .add_col(TextSpan::from("Add note/item"))
-                        .add_row()
-                        .add_col(TextSpan::from(" E").bold())
-                        .add_col(TextSpan::from("    "))
-                        .add_col(TextSpan::from("Edit note/item"))
-                        .add_row()
+                        .add_col(TextSpan::from("      "))
                         .add_col(TextSpan::from(" D").bold())
-                        .add_col(TextSpan::from("    "))
+                        .add_col(TextSpan::from("  "))
                         .add_col(TextSpan::from("Delete note/item"))
                         .build(),
                 ),
