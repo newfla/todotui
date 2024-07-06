@@ -141,7 +141,7 @@ impl Model {
 
             let sub_chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+                .constraints([Constraint::Percentage(85), Constraint::Percentage(15)])
                 .split(main_chunks[0]);
 
             self.app.view(&Id::NoteList, f, sub_chunk[0]);
