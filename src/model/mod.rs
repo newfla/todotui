@@ -8,12 +8,12 @@ use tuirealm::{
     event::{Key, KeyEvent, KeyModifiers},
     listener::{ListenerResult, Poll},
     props::{PropPayload, PropValue},
-    terminal::TerminalBridge,
-    tui::{
+    ratatui::{
         layout::{Constraint, Direction, Layout},
         prelude::Rect,
         widgets::Clear,
     },
+    terminal::{CrosstermTerminalAdapter, TerminalBridge},
     Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
     SubEventClause, Update,
 };
@@ -35,7 +35,7 @@ pub struct Model {
     selected_note_index: usize,
     selected_todo_index: usize,
     notes_wall: SharedWall,
-    terminal: TerminalBridge,
+    terminal: TerminalBridge<CrosstermTerminalAdapter>,
     app: Application<Id, Msg, AppEvent>,
 }
 
@@ -52,15 +52,16 @@ impl Model {
                 .build()
                 .unwrap(),
         ));
-        let mut terminal = TerminalBridge::new().expect("Cannot create terminal bridge");
+        let mut terminal = TerminalBridge::init_crossterm().expect("Cannot create terminal bridge");
         let _ = terminal.enable_raw_mode();
         let _ = terminal.enter_alternate_screen();
         let mut app: Application<Id, Msg, AppEvent> = Application::init(
             EventListenerCfg::default()
-                .default_input_listener(Duration::from_millis(10))
-                .port(
+                .crossterm_input_listener(Duration::from_millis(10), 3)
+                .add_port(
                     Box::new(NotesProvider::new(notes_wall.clone())),
                     Duration::from_millis(100),
+                    3,
                 ),
         );
         assert!(app
@@ -137,7 +138,7 @@ impl Model {
                 .direction(Direction::Horizontal)
                 .margin(1)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(f.size());
+                .split(f.area());
 
             let sub_chunk = Layout::default()
                 .direction(Direction::Vertical)
@@ -149,7 +150,7 @@ impl Model {
             self.app.view(&Id::TodoList, f, main_chunks[1]);
 
             if self.text_edit_popup_open {
-                let popup = Self::draw_area_in_absolute(f.size(), 30, 3);
+                let popup = Self::draw_area_in_absolute(f.area(), 30, 3);
                 f.render_widget(Clear, popup);
                 self.app.view(&Id::EditPopup, f, popup);
             }
