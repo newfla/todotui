@@ -1,5 +1,6 @@
 use tui_realm_stdlib::{Input, List, Phantom};
 use tuirealm::{
+    AttrValue, Attribute, Component, Event, MockComponent,
     command::{
         Cmd,
         CmdResult::{self, Changed},
@@ -9,13 +10,12 @@ use tuirealm::{
     props::{
         Alignment, BorderType, Borders, Color, InputType, Style, Table, TableBuilder, TextSpan,
     },
-    AttrValue, Attribute, Component, Event, MockComponent,
 };
 
 use crate::{
-    backend::{Note, Todo},
     AppEvent,
     Msg::{self, NoteSelected},
+    backend::{Note, Todo},
 };
 
 #[derive(MockComponent, Default)]

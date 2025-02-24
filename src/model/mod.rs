@@ -5,6 +5,8 @@ use std::{
 };
 
 use tuirealm::{
+    Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
+    SubEventClause, Update,
     event::{Key, KeyEvent, KeyModifiers},
     listener::{ListenerResult, Poll},
     props::{PropPayload, PropValue},
@@ -14,16 +16,14 @@ use tuirealm::{
         widgets::Clear,
     },
     terminal::{CrosstermTerminalAdapter, TerminalBridge},
-    Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
-    SubEventClause, Update,
 };
 
 use anyhow::Result;
 
 use crate::{
+    AppEvent, Id, Msg,
     backend::{NotesWall, NotesWallBuilder},
     components::{EditPopup, EditPopupType, NoteList, PhantomListener, ShortcutsLegend, TodoList},
-    AppEvent, Id, Msg,
 };
 
 type SharedWall = Arc<RwLock<NotesWall>>;
@@ -64,17 +64,20 @@ impl Model {
                     3,
                 ),
         );
-        assert!(app
-            .mount(Id::NoteList, Box::<NoteList>::default(), vec![])
-            .is_ok());
-        assert!(app
-            .mount(Id::InfoBox, Box::<ShortcutsLegend>::default(), vec![])
-            .is_ok());
-        assert!(app
-            .mount(Id::TodoList, Box::<TodoList>::default(), vec![])
-            .is_ok());
-        assert!(app
-            .mount(
+        assert!(
+            app.mount(Id::NoteList, Box::<NoteList>::default(), vec![])
+                .is_ok()
+        );
+        assert!(
+            app.mount(Id::InfoBox, Box::<ShortcutsLegend>::default(), vec![])
+                .is_ok()
+        );
+        assert!(
+            app.mount(Id::TodoList, Box::<TodoList>::default(), vec![])
+                .is_ok()
+        );
+        assert!(
+            app.mount(
                 Id::PhantomListener,
                 Box::<PhantomListener>::default(),
                 vec![
@@ -91,7 +94,8 @@ impl Model {
                     )
                 ]
             )
-            .is_ok());
+            .is_ok()
+        );
 
         // We need to give focus to input then
         assert!(app.active(&Id::NoteList).is_ok());
@@ -323,25 +327,29 @@ impl Model {
     }
 
     fn reload_note_list(&mut self) -> Option<Msg> {
-        assert!(self
-            .app
-            .attr(
-                &Id::NoteList,
-                Attribute::Content,
-                AttrValue::Table(NoteList::build_table_note(
-                    self.notes_wall.read().unwrap().get_notes()
-                ))
-            )
-            .is_ok());
+        assert!(
+            self.app
+                .attr(
+                    &Id::NoteList,
+                    Attribute::Content,
+                    AttrValue::Table(NoteList::build_table_note(
+                        self.notes_wall.read().unwrap().get_notes()
+                    ))
+                )
+                .is_ok()
+        );
 
-        assert!(self
-            .app
-            .attr(
-                &Id::NoteList,
-                Attribute::Value,
-                AttrValue::Payload(PropPayload::One(PropValue::Usize(self.selected_note_index)))
-            )
-            .is_ok());
+        assert!(
+            self.app
+                .attr(
+                    &Id::NoteList,
+                    Attribute::Value,
+                    AttrValue::Payload(PropPayload::One(PropValue::Usize(
+                        self.selected_note_index
+                    )))
+                )
+                .is_ok()
+        );
 
         self.selected_todo_index = 0;
         Some(Msg::ReloadTodoList)
@@ -356,18 +364,19 @@ impl Model {
             .get(self.selected_note_index)
         {
             self.text_edit_popup_open = true;
-            assert!(self
-                .app
-                .remount(
-                    Id::EditPopup,
-                    Box::new(EditPopup::new(
-                        &note.title().unwrap(),
-                        "Title",
-                        EditPopupType::Note
-                    )),
-                    vec![]
-                )
-                .is_ok());
+            assert!(
+                self.app
+                    .remount(
+                        Id::EditPopup,
+                        Box::new(EditPopup::new(
+                            &note.title().unwrap(),
+                            "Title",
+                            EditPopupType::Note
+                        )),
+                        vec![]
+                    )
+                    .is_ok()
+            );
             assert!(self.app.active(&Id::EditPopup).is_ok());
         }
         None
@@ -383,18 +392,19 @@ impl Model {
         {
             if let Some(todo) = note.todos().get(self.selected_todo_index) {
                 self.text_edit_popup_open = true;
-                assert!(self
-                    .app
-                    .remount(
-                        Id::EditPopup,
-                        Box::new(EditPopup::new(
-                            &todo.description().unwrap(),
-                            "ToDo",
-                            EditPopupType::Todo
-                        )),
-                        vec![]
-                    )
-                    .is_ok());
+                assert!(
+                    self.app
+                        .remount(
+                            Id::EditPopup,
+                            Box::new(EditPopup::new(
+                                &todo.description().unwrap(),
+                                "ToDo",
+                                EditPopupType::Todo
+                            )),
+                            vec![]
+                        )
+                        .is_ok()
+                );
                 assert!(self.app.active(&Id::EditPopup).is_ok());
             }
         }
@@ -410,34 +420,37 @@ impl Model {
             .get(self.selected_note_index)
         {
             Some(note) => {
-                assert!(self
-                    .app
+                assert!(
+                    self.app
+                        .attr(
+                            &Id::TodoList,
+                            Attribute::Content,
+                            AttrValue::Table(TodoList::build_table_todo(note.todos()))
+                        )
+                        .is_ok()
+                );
+
+                assert!(
+                    self.app
+                        .attr(
+                            &Id::TodoList,
+                            Attribute::Value,
+                            AttrValue::Payload(PropPayload::One(PropValue::Usize(
+                                self.selected_todo_index
+                            )))
+                        )
+                        .is_ok()
+                );
+            }
+            None => assert!(
+                self.app
                     .attr(
                         &Id::TodoList,
                         Attribute::Content,
-                        AttrValue::Table(TodoList::build_table_todo(note.todos()))
+                        AttrValue::Table(TodoList::build_table_todo(vec![]))
                     )
-                    .is_ok());
-
-                assert!(self
-                    .app
-                    .attr(
-                        &Id::TodoList,
-                        Attribute::Value,
-                        AttrValue::Payload(PropPayload::One(PropValue::Usize(
-                            self.selected_todo_index
-                        )))
-                    )
-                    .is_ok());
-            }
-            None => assert!(self
-                .app
-                .attr(
-                    &Id::TodoList,
-                    Attribute::Content,
-                    AttrValue::Table(TodoList::build_table_todo(vec![]))
-                )
-                .is_ok()),
+                    .is_ok()
+            ),
         }
         None
     }

@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use chrono::Utc;
 use derive_builder::Builder;
 use postcard::{from_bytes, to_stdvec};
@@ -264,7 +264,7 @@ impl Note {
         let path = self.0.read().unwrap().path.clone();
         read(path)
             .map(|data| from_bytes::<InternalNote>(&data))
-            .map_or(false, |note| match note {
+            .is_ok_and(|note| match note {
                 Ok(note) => match self.0.write() {
                     Ok(mut data) => {
                         data.note = Some(note);
