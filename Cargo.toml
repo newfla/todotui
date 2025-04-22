@@ -1,7 +1,7 @@
 [package]
 name = "todotui"
 version = "0.0.3"
-edition = "2021"
+edition = "2024"
 authors = ["Flavio Bizzarri <fl.bizzarri@gmail.com>"]
 license = "Apache-2.0"
 description = "A simple todo terminal app"
@@ -21,22 +21,6 @@ tui-realm-stdlib = "2.0.1"
 home = "0.5.9"
 clap = {version ="4.5.8", features = ["derive"]}
 anyhow = "1.0.86"
-
-# Config for 'cargo dist'
-[workspace.metadata.dist]
-# The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.18.0"
-# CI backends to support
-ci = "github"
-# The installers to generate for each app
-installers = []
-# Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
-# Publish jobs to run in CI
-pr-run-mode = "upload"
-
-# Ignore out-of-date contents
-allow-dirty = ["ci"]
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
