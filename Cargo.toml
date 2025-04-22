@@ -38,6 +38,9 @@ pr-run-mode = "upload"
 # Ignore out-of-date contents
 allow-dirty = ["ci"]
 
+[workspace.metadata.dist.github-custom-runners]
+x86_64-unknown-linux-gnu = "ubuntu-22.04"
+
 # The profile that 'cargo dist' will build with
 [profile.dist]
 inherits = "release"
