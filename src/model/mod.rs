@@ -5,11 +5,17 @@ use std::{
 };
 
 use tuirealm::{
-    application::{Application, PollStrategy}, event::{Event, Key, KeyEvent, KeyModifiers}, listener::{EventListenerCfg, Poll, PortResult}, props::{AttrValue, Attribute, PropPayload, PropValue}, ratatui::{
+    application::{Application, PollStrategy},
+    event::{Event, Key, KeyEvent, KeyModifiers},
+    listener::{EventListenerCfg, Poll, PortResult},
+    props::{AttrValue, Attribute, PropPayload, PropValue},
+    ratatui::{
         layout::{Constraint, Direction, Layout},
         prelude::Rect,
         widgets::Clear,
-    }, subscription::{EventClause, Sub, SubClause}, terminal::{CrosstermTerminalAdapter, TerminalAdapter}
+    },
+    subscription::{EventClause, Sub, SubClause},
+    terminal::{CrosstermTerminalAdapter, TerminalAdapter},
 };
 
 use anyhow::Result;
@@ -113,6 +119,7 @@ impl Model {
                 messages.iter().map(Some).for_each(|msg| {
                     let mut msg = msg.cloned();
                     while msg.is_some() {
+                        println!("dddd :{msg:?}");
                         msg = self.update(msg);
                     }
                 });
@@ -182,7 +189,7 @@ impl Model {
 }
 
 impl Model {
-      fn update(&mut self, msg: Option<Msg>) -> Option<Msg> {
+    fn update(&mut self, msg: Option<Msg>) -> Option<Msg> {
         self.redraw = true;
         match msg.unwrap_or(Msg::None) {
             Msg::AppClose => {
