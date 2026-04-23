@@ -5,17 +5,17 @@ use std::{
 };
 
 use tuirealm::{
-    Application, AttrValue, Attribute, Event, EventListenerCfg, PollStrategy, Sub, SubClause,
-    SubEventClause, Update,
-    event::{Key, KeyEvent, KeyModifiers},
-    listener::{ListenerResult, Poll},
-    props::{PropPayload, PropValue},
+    application::{Application, PollStrategy},
+    event::{Event, Key, KeyEvent, KeyModifiers},
+    listener::{EventListenerCfg, Poll, PortResult},
+    props::{AttrValue, Attribute, PropPayload, PropValue},
     ratatui::{
         layout::{Constraint, Direction, Layout},
         prelude::Rect,
         widgets::Clear,
     },
-    terminal::{CrosstermTerminalAdapter, TerminalBridge},
+    subscription::{EventClause, Sub, SubClause},
+    terminal::{CrosstermTerminalAdapter, TerminalAdapter},
 };
 
 use anyhow::Result;
@@ -35,7 +35,7 @@ pub struct Model {
     selected_note_index: usize,
     selected_todo_index: usize,
     notes_wall: SharedWall,
-    terminal: TerminalBridge<CrosstermTerminalAdapter>,
+    terminal: CrosstermTerminalAdapter,
     app: Application<Id, Msg, AppEvent>,
 }
 
@@ -52,7 +52,7 @@ impl Model {
                 .build()
                 .unwrap(),
         ));
-        let mut terminal = TerminalBridge::init_crossterm().expect("Cannot create terminal bridge");
+        let mut terminal = CrosstermTerminalAdapter::new().expect("Cannot create terminal bridge");
         let _ = terminal.enable_raw_mode();
         let _ = terminal.enter_alternate_screen();
         let mut app: Application<Id, Msg, AppEvent> = Application::init(
@@ -82,14 +82,14 @@ impl Model {
                 Box::<PhantomListener>::default(),
                 vec![
                     Sub::new(
-                        SubEventClause::Keyboard(KeyEvent {
+                        EventClause::Keyboard(KeyEvent {
                             code: Key::Esc,
                             modifiers: KeyModifiers::NONE
                         }),
                         SubClause::Always
                     ),
                     Sub::new(
-                        SubEventClause::User(AppEvent::ErrorInitialized),
+                        EventClause::User(AppEvent::ErrorInitialized),
                         SubClause::Always
                     )
                 ]
@@ -115,7 +115,7 @@ impl Model {
     pub fn main_loop(&mut self) {
         while !self.quit {
             // Tick
-            if let Ok(messages) = self.app.tick(PollStrategy::Once) {
+            if let Ok(messages) = self.app.tick(PollStrategy::Once(Duration::from_millis(10))) {
                 messages.iter().map(Some).for_each(|msg| {
                     let mut msg = msg.cloned();
                     while msg.is_some() {
@@ -187,7 +187,7 @@ impl Model {
     }
 }
 
-impl Update<Msg> for Model {
+impl Model {
     fn update(&mut self, msg: Option<Msg>) -> Option<Msg> {
         self.redraw = true;
         match msg.unwrap_or(Msg::None) {
@@ -227,9 +227,7 @@ impl Update<Msg> for Model {
             Msg::SwitchTodoStatus => self.switch_todo_status(),
         }
     }
-}
 
-impl Model {
     fn switch_todo_status(&mut self) -> Option<Msg> {
         let guard = self.notes_wall.write().unwrap();
         if let Some(note) = guard.get_notes().get_mut(self.selected_note_index) {
@@ -333,7 +331,7 @@ impl Model {
                     &Id::NoteList,
                     Attribute::Content,
                     AttrValue::Table(NoteList::build_table_note(
-                        self.notes_wall.read().unwrap().get_notes()
+                        &self.notes_wall.read().unwrap().get_notes()
                     ))
                 )
                 .is_ok()
@@ -344,7 +342,7 @@ impl Model {
                 .attr(
                     &Id::NoteList,
                     Attribute::Value,
-                    AttrValue::Payload(PropPayload::One(PropValue::Usize(
+                    AttrValue::Payload(PropPayload::Single(PropValue::Usize(
                         self.selected_note_index
                     )))
                 )
@@ -435,7 +433,7 @@ impl Model {
                         .attr(
                             &Id::TodoList,
                             Attribute::Value,
-                            AttrValue::Payload(PropPayload::One(PropValue::Usize(
+                            AttrValue::Payload(PropPayload::Single(PropValue::Usize(
                                 self.selected_todo_index
                             )))
                         )
@@ -470,7 +468,7 @@ impl NotesProvider {
 }
 
 impl Poll<AppEvent> for NotesProvider {
-    fn poll(&mut self) -> ListenerResult<Option<Event<AppEvent>>> {
+    fn poll(&mut self) -> PortResult<Option<Event<AppEvent>>> {
         self.init.take().map_or(Ok(None), |result| match result {
             Ok(_) => Ok(Some(Event::User(AppEvent::NoteLoaded(
                 self.wall.read().unwrap().get_notes(),
