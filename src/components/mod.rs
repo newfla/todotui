@@ -1,4 +1,4 @@
-use tui_realm_stdlib::components::{Input, List, Phantom};
+use tui_realm_stdlib::components::{Input, Phantom};
 use tuirealm::component::{AppComponent, Component};
 
 use tuirealm::command::{
@@ -7,7 +7,9 @@ use tuirealm::command::{
     Direction, Position,
 };
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
-use tuirealm::props::{AttrValue, Attribute, HorizontalAlignment, LineStatic, Title};
+use tuirealm::props::{
+    AttrValue, Attribute, HorizontalAlignment, LineStatic, TextModifiers, Title,
+};
 use tuirealm::props::{BorderType, Borders, Color, InputType, Style, Table, TableBuilder};
 use tuirealm::ratatui::style::Stylize;
 use tuirealm::ratatui::text::Line;
@@ -35,21 +37,18 @@ impl AppComponent<Msg, AppEvent> for PhantomListener {
 }
 #[derive(Component)]
 pub struct NoteList {
-    component: List,
+    component: tui_realm_stdlib::components::Table,
 }
 
 impl Default for NoteList {
     fn default() -> Self {
         Self {
-            component: List::default()
-                .title(
-                    Into::<Title>::into("Note List")
-                        .alignment(HorizontalAlignment::Left),
-                )
-                .highlight_style(Style::from(Color::LightYellow))
+            component: tui_realm_stdlib::components::Table::default()
+                .title(Into::<Title>::into("Note List").alignment(HorizontalAlignment::Left))
                 .highlight_str("👉")
                 .scroll(true)
                 .rewind(true)
+                .widths(&[5, 100])
                 .borders(
                     Borders::default()
                         .modifiers(BorderType::Double)
@@ -101,20 +100,21 @@ impl NoteList {
         None
     }
 
-    pub fn build_table_note(notes: &Vec<Note>) -> Table {
+    pub fn build_table_note(notes: &[Note]) -> Table {
         let mut table = TableBuilder::default();
 
         if notes.is_empty() {
             return table.build();
         }
-
         notes.iter().enumerate().for_each(|(index, note)| {
-            let index_str = format!("{:03}", index + 1);
+            let index_str = format!(" {:03}", index + 1);
 
             let row = table
-                .add_col(LineStatic::from(index_str).style(Style::default().fg(Color::Cyan).italic()))
-                .add_col(LineStatic::from("    "))
-                .add_col(LineStatic::from(note.title().unwrap()));
+                .add_col(Line::styled(
+                    index_str,
+                    (Color::Yellow, TextModifiers::ITALIC),
+                ))
+                .add_col(Line::from(note.title().unwrap()));
 
             if index < notes.len() - 1 {
                 row.add_row();
@@ -134,13 +134,10 @@ impl Default for ShortcutsLegend {
     fn default() -> Self {
         Self {
             component: tui_realm_stdlib::components::Table::default()
-                .title(
-                    Title::from("Key Bindings")
-                        .alignment(HorizontalAlignment::Left),
-                )
+                .title(Title::from("Key Bindings").alignment(HorizontalAlignment::Left))
                 .scroll(false)
                 .borders(Borders::default().modifiers(BorderType::Double))
-                .widths(&[6,31,4,31])
+                .widths(&[6, 31, 4, 31])
                 .table(
                     TableBuilder::default()
                         .add_col(LineStatic::from(" ESC").bold())
@@ -171,21 +168,18 @@ impl AppComponent<Msg, AppEvent> for ShortcutsLegend {
 
 #[derive(Component)]
 pub struct TodoList {
-    component: List,
+    component: tui_realm_stdlib::components::Table,
 }
 
 impl Default for TodoList {
     fn default() -> Self {
         Self {
-            component: List::default()
-                .title(
-                    Into::<Title>::into("Item List")
-                        .alignment(HorizontalAlignment::Left),
-                )
-                .highlight_style(Style::from(Color::LightYellow))
+            component: tui_realm_stdlib::components::Table::default()
+                .title(Into::<Title>::into("Item List").alignment(HorizontalAlignment::Left))
                 .highlight_str("👉")
                 .scroll(true)
                 .rewind(true)
+                .widths(&[3, 100])
                 .borders(
                     Borders::default()
                         .modifiers(BorderType::Double)
@@ -235,18 +229,17 @@ impl TodoList {
         if todos.is_empty() {
             return table.build();
         }
-        
+
         todos.iter().enumerate().for_each(|(index, todo)| {
-            let (done, space) = match todo.done().unwrap() {
-                Some(true) => ("✔️", "  "),
-                Some(false) => ("❌", " "),
-                None => ("❓", " "),
+            let done = match todo.done().unwrap() {
+                Some(true) => " ✔️",
+                Some(false) => " ❌",
+                None => " ❓",
             };
 
             let description = todo.description().unwrap();
             let row = table
                 .add_col(Line::from(done))
-                .add_col(Line::from(space))
                 .add_col(Line::from(description));
 
             if index < todos.len() - 1 {
@@ -329,7 +322,10 @@ impl EditPopup {
                 )
                 .foreground(Color::LightYellow)
                 .input_type(InputType::Text)
-                .title(Title::from(LineStatic::from(popup_title.clone())).alignment(HorizontalAlignment::Left))
+                .title(
+                    Title::from(Line::from(popup_title.clone()))
+                        .alignment(HorizontalAlignment::Left),
+                )
                 .value(data)
                 .invalid_style(Style::default().fg(Color::Red)),
             edit_type,
@@ -337,7 +333,10 @@ impl EditPopup {
     }
 }
 
-fn maybe_scroll_list(list: &mut List, ev: &Event<AppEvent>) -> CmdResult {
+fn maybe_scroll_list(
+    list: &mut tui_realm_stdlib::components::Table,
+    ev: &Event<AppEvent>,
+) -> CmdResult {
     match ev {
         Event::Keyboard(KeyEvent {
             code: Key::Down, ..

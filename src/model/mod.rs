@@ -119,7 +119,6 @@ impl Model {
                 messages.iter().map(Some).for_each(|msg| {
                     let mut msg = msg.cloned();
                     while msg.is_some() {
-                        println!("dddd :{msg:?}");
                         msg = self.update(msg);
                     }
                 });

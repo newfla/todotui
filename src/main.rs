@@ -24,7 +24,7 @@ fn main() {
                 }
                 match create_dir(dir.clone()) {
                     Ok(_) => Model::new(dir).main_loop(),
-                    Err(err) => println!("{}", err),
+                    Err(err) => println!("{err}"),
                 }
             }
             None => panic!("Home directory discovery failed :("),
